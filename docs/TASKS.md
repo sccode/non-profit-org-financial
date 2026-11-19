@@ -45,7 +45,7 @@ Each task is sized at about half a day or less. Each one is also a GitHub issue,
 28. Matching engine: exact amount plus date window; ignore internal transfers such as credit card autopay
 29. Fuzzy name/memo matching
 30. Many-to-one matching for Benevity payouts
-31. Reconciliation screen: matched, unmatched, manual match
+31. Reconciliation screen: matched, unmatched, manual match, resolve as refund
 32. Month-close report saved to Drive
 
 ## H. Dashboard

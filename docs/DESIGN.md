@@ -63,6 +63,7 @@ Status flow: Submitted, Verified, Receipt sent (if applicable), Reconciled.
    - Credit card: expenses marked "paid by credit card".
 5. Matching order: exact amount, then date window, then name/memo similarity.
 6. Leftovers appear as unmatched on either side, and the treasurer can match them manually or add a note.
+   - **Refunds:** a treasurer can resolve an unexpected incoming payment as a refund of a specific expense (for example, a personal purchase charged to the credit card and later repaid by Zelle). The refund offsets that expense. It is not counted as donation income, and the dashboard shows expenses net of refunds.
 7. A month-close report is saved to Drive.
 
 ### 4.4 Bank CSV format (Chase checking sample)
@@ -74,7 +75,7 @@ What the sample shows, and how the parser and matcher handle it:
 | Row kind | `Type` | How it appears | Handling |
 |---|---|---|---|
 | Zelle sent | `QUICKPAY_DEBIT`, `CHASE_TO_PARTNERFI` | `Zelle payment to <name> <confirmation#>` | Match to a reimbursement marked paid. Pull the confirmation number from the description to pre-fill or verify it. |
-| Zelle received | `QUICKPAY_CREDIT` | `Zelle payment from <name> <confirmation#>` | Match to a donation, otherwise flag for manual review (it may be a refund or a returned reimbursement). |
+| Zelle received | `QUICKPAY_CREDIT` | `Zelle payment from <name> <confirmation#>` | Not expected in normal operation. Always lands in the review queue as an exception. The usual cause is a submitter repaying a personal purchase mistakenly put on the organization's credit card, so the treasurer resolves it as a **refund** linked to that expense (see below). |
 | Benevity payout | `ACH_CREDIT` | Description contains `benevity` and a `Donation from ...` reference | Match one deposit to many imported Benevity donations. |
 | Credit card payoff | `ACH_DEBIT` | `CHASE CREDIT CRD AUTOPAY` | Internal transfer, not an expense. Ignore for matching. The individual card purchases are matched from the credit card CSV instead. |
 
@@ -125,6 +126,7 @@ Reconciliation/<year>/        month-close reports, audit exports
 - **StatementFile:** Drive file ID, account, period, processed flag
 - **Transaction:** statement file, date, description, amount, account
 - **Match:** transaction to expense or donation (many-to-one allowed for Benevity)
+- **Refund:** an incoming transaction linked to the expense it offsets, with a note
 - **EmailLog:** receipt and confirmation emails sent
 - **AuditLog:** who did what and when
 
@@ -157,6 +159,5 @@ The receipt links already point at Drive files, so the import links them directl
 ## 11. Open questions
 
 - Credit card transactions: confirm the card offers CSV download and provide a sample (bank CSV sample received).
-- How should a Zelle payment received (not a Benevity deposit) be treated: as a donation, a refund, or always manual?
 - Receipt numbering for donation receipts (sequential or none).
 - Email notification to the treasurer on each new submission.
