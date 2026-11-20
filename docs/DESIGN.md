@@ -19,7 +19,7 @@ Replace the current Google Forms + Google Sheets + Apps Script workflow with one
 - **Zelle payments stay manual.** The treasurer pays outside the app, then marks the expense paid.
 - **English only.**
 - **Files live in Google Drive**, in folders the treasurer configures. Existing files stay where they are.
-- **Bank and credit card transactions are imported from monthly CSV downloads.** The PDF statements are still kept in Drive for the record, but the app reads the CSV.
+- **Bank and credit card transactions are imported from monthly CSV downloads, uploaded directly in the web app.** The app never scans or polls Drive for statements. The official statement PDF is dropped in alongside the CSV and is archived to Drive, not parsed.
 
 ## 3. Roles
 
@@ -55,16 +55,18 @@ Status flow: Submitted, Verified, Receipt sent (if applicable), Reconciled.
 
 ### 4.3 Reconciliation
 
-1. The treasurer downloads the month's transactions as CSV from the bank and the credit card, and uploads them (with the PDF) to the by-year Statements folder in Drive.
-2. The app lists new, unprocessed statement files.
-3. The treasurer clicks **Run reconciliation** on a new file.
+1. The treasurer downloads the month's transactions as CSV, and the official statement as PDF, from the bank (and likewise from the credit card).
+2. On the **Reconciliation page** there is a single drag-and-drop target: "Drop this month's CSV and official statement PDF here". The treasurer picks the account (bank or credit card), or the app detects it from the CSV header.
+3. The app parses the CSV **in memory** and immediately opens the reconciliation screen. Nothing is written to Drive yet.
 4. The app matches transactions to records:
    - Bank: Zelle reimbursements paid, cash/check donations received, Benevity payouts (one deposit matching many donations).
    - Credit card: expenses marked "paid by credit card".
 5. Matching order: exact amount, then date window, then name/memo similarity.
 6. Leftovers appear as unmatched on either side, and the treasurer can match them manually or add a note.
    - **Refunds:** a treasurer can resolve an unexpected incoming payment as a refund of a specific expense (for example, a personal purchase charged to the credit card and later repaid by Zelle). The refund offsets that expense. It is not counted as donation income, and the dashboard shows expenses net of refunds.
-7. A month-close report is saved to Drive.
+7. When the treasurer clicks **Finish**, the app saves the transactions and matches to the database, then uploads the **statement PDF** and the generated **audit report** to `Statements/<year>/` in Drive with standardized names. Files are uploaded on Finish, not on drop, so an abandoned session leaves nothing behind in Drive.
+
+Re-uploading a month: transactions already saved are detected (same date, amount, description, and running balance) and skipped, so a second upload of overlapping dates does not create duplicates.
 
 ### 4.4 Bank CSV format (Chase checking sample)
 
@@ -105,14 +107,14 @@ CSV export for each table.
 ```
 Receipts/<year>/              expense receipts (existing)
 Donation Receipts/<year>/     PDFs sent to donors
-Statements/<year>/            treasurer uploads (PDF and CSV)
-Reconciliation/<year>/        month-close reports, audit exports
+Statements/<year>/            official statement PDFs and audit reports, uploaded by the app
 ```
 
 - File names:
   - Expense receipts, existing pattern: `${expenseDate}_${projectName}_${category}_${sender}_$${amount}.${ext}`
   - Donation receipts: `yyyymmdd-donorname-$amount.pdf`
-  - Reconciliation reports: `yyyymm-reconciliation.pdf` and `.csv`
+  - Statement PDFs: `yyyymm-<account>-statement.pdf`, e.g. `202610-Checking-statement.pdf`
+  - Audit reports: `yyyymm-<account>-audit-report.pdf`, e.g. `202610-Checking-audit-report.pdf`
 - Duplicate names get a `-2`, `-3` suffix. Special characters are stripped from names.
 - Submitters never get Drive access. The app server uploads on their behalf.
 - The database stores the Drive file ID and link only.
@@ -123,8 +125,8 @@ Reconciliation/<year>/        month-close reports, audit exports
 - **Category:** name, active flag
 - **Expense:** submitted at, project, category, description, amount, submitter name, expense date, payment method, status, receipt Drive file ID, Zelle paid date and confirmation
 - **Donation:** submitted at, project, donor name, donor email (optional), donation date, type, amount, description, source (form / Benevity), receipt requested, status, processed date
-- **StatementFile:** Drive file ID, account, period, processed flag
-- **Transaction:** statement file, date, description, amount, account
+- **StatementUpload:** account, period, statement PDF Drive file ID, audit report Drive file ID, finished-at. The raw CSV is not stored; its rows live in Transaction.
+- **Transaction:** statement upload, date, description, amount, running balance, account
 - **Match:** transaction to expense or donation (many-to-one allowed for Benevity)
 - **Refund:** an incoming transaction linked to the expense it offsets, with a note
 - **EmailLog:** receipt and confirmation emails sent

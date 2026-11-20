@@ -8,7 +8,7 @@ Each task is sized at about half a day or less. Each one is also a GitHub issue,
 3. Add treasurer login with 2FA
 4. Add the audit log helper
 5. Connect Google Drive OAuth
-6. Add a settings screen with a folder-ID field for each Drive folder
+6. Add a settings screen with a folder-ID field for each Drive folder (Receipts, Donation Receipts, Statements)
 
 ## B. Setup data
 7. Projects: add, edit, archive
@@ -39,14 +39,14 @@ Each task is sized at about half a day or less. Each one is also a GitHub issue,
 24. Import the Processed Donations sheet
 
 ## G. Reconciliation
-25. Detect new files in the Statements folder
+25. Reconciliation page with a drag-and-drop target for the CSV and statement PDF; parse the CSV in memory
 26. Bank CSV parser (Chase format) with running-balance integrity check
 27. Credit card CSV parser (needs a sample file)
 28. Matching engine: exact amount plus date window; ignore internal transfers such as credit card autopay
 29. Fuzzy name/memo matching
 30. Many-to-one matching for Benevity payouts
 31. Reconciliation screen: matched, unmatched, manual match, resolve as refund
-32. Month-close report saved to Drive
+32. On Finish, save transactions and matches, then upload the statement PDF and audit report to Statements/<year>/ with standardized names
 
 ## H. Dashboard
 33. Yearly project income/expense table with year selector
