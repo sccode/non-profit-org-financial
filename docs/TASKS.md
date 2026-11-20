@@ -17,7 +17,7 @@ Each task is sized at about half a day or less. Each one is also a GitHub issue,
 ## C. Expense intake
 9. Public expense form UI
 10. Expense submit endpoint with validation
-11. Receipt upload to Drive with the naming pattern and duplicate suffix
+11. Direct-to-Drive resumable receipt upload (server creates the session), with the naming pattern and duplicate suffix
 12. CAPTCHA and rate limiting on public forms
 13. Confirmation email to the submitter
 
@@ -25,7 +25,7 @@ Each task is sized at about half a day or less. Each one is also a GitHub issue,
 14. Expense list with filters (status, project, payment method)
 15. Detail view showing the Drive receipt beside the entered amount
 16. Approve, reject, and edit actions
-17. "Mark paid via Zelle" button with date and confirmation number
+17. "Mark paid via Zelle" button: marks processed, with date and optional confirmation number
 
 ## E. Donation intake and receipts
 18. Public donation form with the conditional email field
@@ -42,11 +42,11 @@ Each task is sized at about half a day or less. Each one is also a GitHub issue,
 25. Reconciliation page with a drag-and-drop target for the CSV and statement PDF; parse the CSV in memory
 26. Bank CSV parser (Chase format) with running-balance integrity check
 27. Credit card CSV parser (needs a sample file)
-28. Matching engine: exact amount plus date window; ignore internal transfers such as credit card autopay
-29. Fuzzy name/memo matching
-30. Many-to-one matching for Benevity payouts
-31. Reconciliation screen: matched, unmatched, manual match, resolve as refund
-32. On Finish, save transactions and matches, then upload the statement PDF and audit report to Statements/<year>/ with standardized names
+28. Match suggestions: exact Zelle confirmation number, else exact amount within ±14 days; flag likely internal transfers such as credit card autopay
+29. Side-by-side reconciliation screen: transactions beside suggested records, click to confirm
+30. Benevity payouts: select several donations against one deposit with a running-sum check
+31. Exceptions: manual match, resolve as refund, or ignore with a note
+32. On Finish, save transactions and matches, then upload the statement PDF, transactions CSV, and audit report to Statements/<year>/ with standardized names
 
 ## H. Dashboard
 33. Yearly project income/expense table with year selector
