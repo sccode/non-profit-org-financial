@@ -1,10 +1,10 @@
 # Non-Profit Financial App: Design
 
-Status: draft for review. Last updated 2026-11-19.
+Status: draft for review. Last updated 2026-11-20. Architecture: Google-native (Apps Script + Google Sheets + Google Drive).
 
 ## 1. Goal
 
-Replace the current Google Forms + Google Sheets + Apps Script workflow with one web app that handles:
+Replace the current Google Forms + Google Sheets + Apps Script workflow with one web app, built on Apps Script, Google Sheets, and Google Drive, that handles:
 
 - Expense (reimbursement) and donation intake
 - Treasurer review, payment tracking, and donation receipts
@@ -13,9 +13,10 @@ Replace the current Google Forms + Google Sheets + Apps Script workflow with one
 
 ## 2. Scope and decisions
 
-- **Single organization per deployment.** Future organizations get their own fully separate deployment and database. No multi-tenancy.
-- **Submitters need no account.** Expense and donation forms are public links, protected by CAPTCHA and rate limiting.
-- **One treasurer account**, with login and 2FA.
+- **Google-native, no hosting.** Everything runs inside the treasurer's Google account: a Google Sheet holds the data, Apps Script runs the app, and Google Drive holds the files. There are no servers, hosting fees, or databases to maintain (section 9).
+- **Single organization per deployment.** A future organization gets its own copy of the Sheet, script, and Drive folders, fully separate. No multi-tenancy.
+- **Submitters need no account.** Expense and donation forms are public links, protected by a honeypot field, rate limiting, and an optional shared passcode.
+- **One treasurer account:** the treasurer's Google account, with 2FA provided by Google.
 - **Zelle payments stay manual.** The treasurer pays outside the app, then marks the expense paid.
 - **English only.**
 - **Files live in Google Drive**, in folders the treasurer configures. Existing files stay where they are.
@@ -27,7 +28,7 @@ Replace the current Google Forms + Google Sheets + Apps Script workflow with one
 | Role | Access | Can do |
 |---|---|---|
 | Submitter | Public link, no login | Submit expenses and donations |
-| Treasurer | Login + 2FA | Manage projects and categories, review expenses, mark paid, verify donations, send receipts, import Benevity reports, run reconciliation, view dashboard |
+| Treasurer | Google account (2FA from Google), private deployment | Manage projects and categories, review expenses, mark paid, verify donations, send receipts, import Benevity reports, run reconciliation, view dashboard |
 
 ## 4. Workflows
 
@@ -58,7 +59,7 @@ Status flow: Submitted, Verified, Receipt sent (if applicable), Reconciled.
 
 1. The treasurer downloads the month's transactions as CSV, and the official statement as PDF, from the bank (and likewise from the credit card).
 2. On the **Reconciliation page** there is a single drag-and-drop target: "Drop this month's CSV and official statement PDF here". The treasurer picks the account (bank or credit card), or the app detects it from the CSV header.
-3. The app parses the CSV **in memory** and immediately opens the reconciliation screen. Nothing is written to Drive yet.
+3. The app parses the CSV **in the browser, in memory**, and immediately opens the reconciliation screen. Nothing is written to Drive yet.
 4. The app shows a **side-by-side reconciliation screen**: bank or card transactions on one side, candidate records on the other. It only **suggests** matches, and the treasurer confirms each with a click:
    - **Exact Zelle confirmation number:** a certain match, offered as a one-click "confirm all".
    - **Same amount within ±14 days** of the record's date.
@@ -66,7 +67,7 @@ Status flow: Submitted, Verified, Receipt sent (if applicable), Reconciled.
 5. There is no fuzzy name or memo matching. Names are shown side by side so the treasurer can judge, but they never drive a match. At 10 to 100 transactions a month, a wrong automatic match costs more to unravel than a click costs to confirm.
 6. Anything unmatched stays visible. The treasurer can match it manually, ignore it with a note, or mark it as an internal transfer (the app flags likely ones, such as credit card autopay).
    - **Refunds:** a treasurer can resolve an unexpected incoming payment as a refund of a specific expense (for example, a personal purchase charged to the credit card and later repaid by Zelle). The refund offsets that expense. It is not counted as donation income, and the dashboard shows expenses net of refunds.
-7. When the treasurer clicks **Finish**, the app saves the transactions and matches to the database, then uploads the **statement PDF**, the **transactions CSV**, and the generated **audit report** to `Statements/<year>/` in Drive with standardized names. Files are uploaded on Finish, not on drop, so an abandoned session leaves nothing behind in Drive.
+7. When the treasurer clicks **Finish**, the app saves the transactions and matches to the Sheet, then uploads the **statement PDF**, the **transactions CSV**, and the generated **audit report** to `Statements/<year>/` in Drive with standardized names. Files are uploaded on Finish, not on drop, so an abandoned session leaves nothing behind in Drive.
 
 Re-uploading a month: transactions already saved are detected (same date, amount, description, and running balance) and skipped, so a second upload of overlapping dates does not create duplicates.
 
@@ -103,7 +104,7 @@ CSV export for each table.
 
 ## 6. Google Drive
 
-- Treasurer authorizes Drive access once (OAuth, narrow `drive.file` scope) and enters the folder IDs in Settings.
+- The script runs as the treasurer, who approves its Drive, Sheets, and Gmail permissions once. Because the existing folders were not created by the script, it needs the broad Drive permission. The folder IDs are entered in Settings.
 - Layout (existing folders are reused, subfolders created only if missing):
 
 ```
@@ -119,10 +120,10 @@ Statements/<year>/            statement PDFs, transaction CSVs, and audit report
   - Transaction CSVs: `yyyymm-<account>-transactions.csv`, e.g. `202610-Checking-transactions.csv`
   - Audit reports: `yyyymm-<account>-audit-report.pdf`, e.g. `202610-Checking-audit-report.pdf`
 - Duplicate names get a `-2`, `-3` suffix. Special characters are stripped from names.
-- Submitters never get Drive access. Receipt photos can be 5 to 15 MB, so the browser uploads them **directly to Drive with a resumable upload**: the server validates the form, creates the Drive upload session (file name, folder, and type set by the server, using the treasurer's authorization), and hands the browser only that session URL. The file never passes through the app server, which avoids serverless request-size limits and lets an upload resume after a dropped mobile connection. If a submitter uploads a file and never submits the form, the orphaned file is flagged for cleanup.
-- The database stores the Drive file ID and link only.
+- Submitters never get Drive access. Receipt photos can be 5 to 15 MB, so the browser uploads them **directly to Drive with a resumable upload**: the script (running as the treasurer) validates the form, creates the Drive upload session (file name, folder, and type set by the script), and hands the browser only that session URL. The file never passes through the script, which avoids Apps Script's request-size limits and lets an upload resume after a dropped mobile connection. If the platform spike (task 2) finds that Apps Script pages cannot do this (a browser origin restriction is the likely problem), the fallback is to shrink photos in the browser and send them to the script in chunks. If a submitter uploads a file and never submits the form, the orphaned file is flagged for cleanup.
+- The Sheet stores the Drive file ID and link only.
 
-## 7. Data model (simplified)
+## 7. Data model (one Sheet tab per record type)
 
 - **Project:** name (e.g. `202510 MidAutumnFestival`, `General Donation`), active flag
 - **Category:** name, active flag
@@ -134,6 +135,7 @@ Statements/<year>/            statement PDFs, transaction CSVs, and audit report
 - **Refund:** an incoming transaction linked to the expense it offsets, with a note
 - **EmailLog:** receipt and confirmation emails sent
 - **AuditLog:** who did what and when
+- **Settings:** organization name, EIN, receipt wording, Drive folder IDs
 
 ## 8. Existing data
 
@@ -142,20 +144,41 @@ Two existing Sheet tabs are imported once:
 - **Processed Expenses:** Timestamp, Project, Category, Description/Reason, Amount, Expensed By, Date of Expense, Receipt Link, Payment Method
 - **Processed Donations:** Submit Timestamp, Project, Vendor Name, Vendor Email, Donation Date, Type, Amount, Description, Processed Date
 
-The receipt links already point at Drive files, so the import links them directly with no copying or renaming.
+The receipt links already point at Drive files, so the import links them directly with no copying or renaming. The app uses a new spreadsheet; the old one is left untouched as a backup until cutover.
 
-## 9. Tech stack (suggested)
+## 9. Architecture (Google-native)
 
-- Next.js (TypeScript) with Postgres
-- Google Drive API (OAuth) for files
-- Email via Resend or SendGrid
-- PDF generation for donation receipts and reports
-- Hosting: Vercel or Render, with managed Postgres and nightly backups
+Everything runs inside the treasurer's Google account.
+
+| Piece | What it is |
+|---|---|
+| Data | One Google Sheet per organization, one tab per record type (section 7). Readable and fixable by hand. |
+| Code | One Apps Script project bound to that Sheet, written in TypeScript and pushed with `clasp`. The source lives in this repo. |
+| Public site | Web-app deployment A: runs as the treasurer, open to anyone with the link. Serves only the expense form, the donation form, and the upload-session endpoint. |
+| Treasurer site | Web-app deployment B: only the treasurer's Google account can open it, plus an email allowlist check in code. Serves review, reconciliation, settings, and the dashboard. |
+| Files | Google Drive folders (section 6). |
+| Email and PDFs | Gmail for receipts and confirmations. Donation receipts are PDFs made from a Google Docs template; audit reports are PDFs made from HTML. |
+| Charts | Chart.js in the browser, fed pre-aggregated rows by the script. |
+| Browser-side logic | CSV parsing, match suggestions, and the reconciliation screen run in the browser. The script reads and writes the Sheet. |
+
+**Why two deployments.** Apps Script sets "who it runs as" and "who can open it" per deployment. The forms must be open to people with no Google login, and the treasurer screens must not be, so they are separate deployments of the same project. The platform spike (task 2) confirms this setup works as expected.
+
+**Limits and how the design handles them**
+
+- **Execution time:** each call is capped at a few minutes. Processing a month of tens of rows is far below that.
+- **Email quota:** about 100 recipients a day on a free Google account, more on Workspace. That is plenty for donation receipts. If a batch exceeds the quota, the rest wait for the next day and the treasurer is told.
+- **Concurrent writes:** a lock around Sheet writes keeps two simultaneous submissions from colliding.
+- **Sheet size:** a few thousand rows a year is fine. Older years can be moved to an archive file.
+- **Testing:** the logic (CSV parsing, balance check, match suggestions, file naming, dashboard totals) is plain TypeScript with unit tests that run in CI without Google. The Apps Script parts are thin wrappers around it.
+- **Deploying:** `clasp push` from a computer with Node installed, or a manual copy into the Apps Script editor (task 40).
+- **Backups:** a scheduled script copies the Sheet to a Drive folder weekly (task 38).
+- **New organization:** copy the template Sheet (its script comes along), set the folder IDs, and create the two deployments (task 39).
 
 ## 10. Security and privacy
 
-- Treasurer login with 2FA; all treasurer routes require it.
-- Public forms: CAPTCHA, rate limiting, file type and size limits.
+- Treasurer pages are a separate deployment that only the treasurer's Google account can open (2FA comes from Google), plus an email allowlist check in code.
+- The public deployment runs with the treasurer's authority, so it exposes only fixed, validated actions (submit an expense, submit a donation, create an upload session) and never reads or returns existing records.
+- Public forms: honeypot field, rate limit, optional shared passcode, file type and size limits. A real CAPTCHA is awkward inside Apps Script pages; the spike (task 2) checks whether one works.
 - Receipt upload session URLs are tied to one file in the configured folder and expire.
 - Drive folders private; no link sharing.
 - No bank credentials stored. Only the uploaded CSV data is processed.
@@ -166,5 +189,6 @@ The receipt links already point at Drive files, so the import links them directl
 
 - Credit card transactions: confirm the card offers CSV download and provide a sample (bank CSV sample received).
 - Receipt numbering for donation receipts (sequential or none).
-- Stack: keep Next.js + Postgres + Vercel (section 9), or move to a lighter, Google-native setup. Under review.
+- Existing Apps Script code: your current scripts already send donation receipts and move processed rows. Sharing that code (and the receipt template or wording) lets us reuse the logic instead of rewriting it.
+- Deployment: can the treasurer run `clasp` on a computer with Node installed, or should releases be a manual copy into the Apps Script editor?
 - Email notification to the treasurer on each new submission.
